@@ -70,6 +70,7 @@ const userScheduleSchema = new mongoose.Schema(
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
+      ref: "User" ,
     },
   },
   { timestamps: true }
@@ -79,7 +80,7 @@ const userInfoSchema = new mongoose.Schema(
   {
     original_name: {
       type: String,
-      default: null,
+      default: "User",
     },
     phone_number: {
       type: Number,
@@ -103,6 +104,7 @@ const userInfoSchema = new mongoose.Schema(
     user_id: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
+      ref: "User" ,
     },
   },
   { timestamps: true }

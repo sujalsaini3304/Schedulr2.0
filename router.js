@@ -1,7 +1,7 @@
 import { Router } from "express";
 import mongoose from "mongoose";
 import dotenv from "dotenv";
-import { Schedule, User } from "./modals.js";
+import { Schedule, User, UserInfo } from "./modals.js";
 import becrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import JWT_Auth_Middleware from "./jwt.middleware.js";
@@ -46,28 +46,38 @@ router.post("/api/create/user", async (req, res) => {
           password: req.body.password,
           profileImageURI: req.body.profileImageURI || null,
         })
-          .then(() => {
-            jwt.sign(
-              {
-                username: req.body.username,
-                email: req.body.email,
-              },
-              process.env.JWT_SECRET_CODE,
-              { expiresIn: process.env.JWT_TOKEN_EXPIRY },
-              (err, token) => {
-                if (err) {
-                  return res.status(500).json({
-                    Message: "Internal server error for JWT",
-                    Status: "Failed",
-                  });
-                }
-                res.status(200).json({
-                  Message: "User successfully created in database",
-                  JWT_Token: token,
-                  Status: "Okay",
+          .then(async (data) => {
+            await UserInfo.insertOne({ user_id: data._id })
+              .then(() => {
+                jwt.sign(
+                  {
+                    username: req.body.username,
+                    email: req.body.email,
+                  },
+                  process.env.JWT_SECRET_CODE,
+                  { expiresIn: process.env.JWT_TOKEN_EXPIRY },
+                  (err, token) => {
+                    if (err) {
+                      return res.status(500).json({
+                        Message: "Internal server error for JWT",
+                        Status: "Failed",
+                      });
+                    }
+                    res.status(200).json({
+                      Message: "User successfully created in database",
+                      JWT_Token: token,
+                      Status: "Okay",
+                    });
+                  }
+                );
+              })
+              .catch((err) => {
+                console.log(err);
+                res.status(500).json({
+                  Message: "Internal server error for mongodb",
+                  Status: "Failed",
                 });
-              }
-            );
+              });
           })
           .catch((e) => {
             res.status(400).json({
@@ -135,12 +145,40 @@ router.delete("/api/delete/user", JWT_Auth_Middleware, async (req, res) => {
           });
         }
 
+        await UserInfo.deleteOne({ user_id: user._id })
+          .then(() => {
+            console.log(
+              "Deleted userInfoSchema successfully for user id = ",
+              user._id
+            );
+          })
+          .catch((err) => {
+            console.log("Problem occur in deletion of userInfoSchema");
+            console.log(err);
+          });
+
+        await Schedule.deleteMany({ user_id: user._id })
+          .then(() => {
+            console.log(
+              "Deleted userScheduleSchema successfully for user id = ",
+              user._id
+            );
+          })
+          .catch((err) => {
+            console.log("Problem occur in deletion of userScheduleSchema");
+            console.log(err);
+          });
+
         await User.deleteOne({
           username: req.auth.username,
           email: req.auth.email,
         })
           .then(() => {
-            res.json({
+            console.log(
+              "Deleted userSchema successfully for user id = ",
+              user._id
+            );
+            res.status(200).json({
               Message: "User successfully deleted from database",
               Status: "Okay",
             });
@@ -189,7 +227,7 @@ router.post("/api/verify/user", async (req, res) => {
       .connect(process.env.MONGODB_URI, { dbName: process.env.DB_NAME })
       .then(async () => {
         console.log("Connected to database");
-
+        let user_info;
         const user = await User.findOne({
           username: req.body.username,
           email: req.body.email,
@@ -201,6 +239,12 @@ router.post("/api/verify/user", async (req, res) => {
           return res.status(404).json({
             Message: "User not exist in database",
             Status: "Verify failed",
+          });
+        }
+
+        if (user != null) {
+          user_info = await UserInfo.findOne({
+            user_id: user._id,
           });
         }
 
@@ -228,6 +272,7 @@ router.post("/api/verify/user", async (req, res) => {
             res.status(200).json({
               Message: "User successfully verified",
               JWT_Token: token,
+              User_Info: user_info != null ? user_info : null,
               Status: "Okay",
             });
           }
